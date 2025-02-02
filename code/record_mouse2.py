@@ -1,32 +1,36 @@
 import tkinter as tk
-from collections import deque
 import time
+from collections import deque
 
 
-class MouseTracker:
-    def __init__(self, root, update_frequency=100, max_size=100):
-        self.update_position = False
+class MouseRecorder:
+    def __init__(self, root, update_frequency=50, max_length=100):
         self.root = root
-        self.update_frequency = update_frequency
-        self.frame = tk.Frame(root, bg='yellow', width=500, height=500)
-        self.frame.bind("<Motion>", self.track_mouse)
-        self.frame.bind("<Button-1>", self.toggle_update)
-        self.frame.pack()
+        self.update_position = False
         self.last_event = None
-        self.positions = deque(maxlen=max_size)
+        self.update_frequency = update_frequency  # Update frequency in milliseconds
+        self.positions = deque(maxlen=max_length)
+        self.canvas = tk.Canvas(root, width=500, height=500)
+        self.canvas.pack()
+        self.canvas.bind("<Motion>", self.motion)
+        self.canvas.bind("<Button-1>", self.toggle_update)
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
-    def track_mouse(self, event):
+    def motion(self, event):
         self.last_event = event
 
     def showxy(self):
         if self.update_position and self.last_event:
             xm, ym = self.last_event.x, self.last_event.y
             timestamp = time.time()
+            if len(self.positions) == self.positions.maxlen:
+                old_x, old_y, _ = self.positions[0]
+                self.canvas.create_rectangle(
+                    old_x-2, old_y-2, old_x+2, old_y+2, fill='white')
             self.positions.append((xm, ym, timestamp))
+            self.canvas.create_rectangle(xm-2, ym-2, xm+2, ym+2, fill='black')
             str1 = f"mouse at x={xm}  y={ym}"
             self.root.title(str1)
-            self.frame.config(bg='white')
         self.root.after(self.update_frequency, self.showxy)
 
     def toggle_update(self, event):
@@ -42,6 +46,9 @@ class MouseTracker:
 
 
 root = tk.Tk()
-# Update frequency in milliseconds, max size of the deque
-app = MouseTracker(root, update_frequency=100, max_size=100)
+app = MouseRecorder(
+    root,
+    update_frequency=30,
+    max_length=1000,
+)
 root.mainloop()
