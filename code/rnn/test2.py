@@ -13,7 +13,7 @@ os.environ["JAX_TRACEBACK_FILTERING"] = "off"
 
 SAVE = True
 
-n_epochs = 100
+n_epochs = 1000
 n_batch_samples = 10
 learning_rate = 0.01
 
@@ -26,7 +26,7 @@ input_size = 2
 hidden_size = 2
 output_size = 2
 
-train_seq_length = 9
+train_seq_length = 20
 
 SEED_PARAMS = 0
 
@@ -64,9 +64,7 @@ model_info_dict = {
     "SEED_PARAMS": SEED_PARAMS,
 }
 
-name_suffix = (
-    f"_{input_size}_{hidden_size}_{output_size}_{train_seq_length}_{SEED_PARAMS}"
-)
+name_suffix = f"_{input_size}_{hidden_size}_{output_size}"
 model_name = "rnn" + name_suffix
 
 
