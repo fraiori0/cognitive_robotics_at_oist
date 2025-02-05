@@ -13,16 +13,19 @@ os.environ["JAX_TRACEBACK_FILTERING"] = "off"
 
 SAVE = True
 
+data_name = "eight"
+hidden_size = 8
+
 SEED = 0
 key = jax.random.key(SEED)
-n_steps = 10
+n_steps = 30
 
 """------------------"""
 """ Model """
 """------------------"""
 
 input_size = 2
-hidden_size = 2
+
 output_size = 2
 
 train_seq_length = 9
@@ -43,9 +46,10 @@ model_path = os.path.join(
     os.pardir,
     os.pardir,
     "models",
+    data_name,
 )
 
-name_suffix = f"_{input_size}_{hidden_size}_{output_size}"
+name_suffix = f"_{data_name}_{hidden_size}"
 model_name = "rnn" + name_suffix
 
 # import the model's parameters if they exist
