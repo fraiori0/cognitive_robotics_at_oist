@@ -13,7 +13,7 @@ os.environ["JAX_TRACEBACK_FILTERING"] = "off"
 
 SAVE = True
 
-data_name = "two_circles"
+data_name = "two_circles_opp"
 hidden_size = 16
 
 SEED = 0
@@ -28,8 +28,8 @@ input_size = 2
 output_size = 2
 train_seq_length = 100
 
-h0_min = 0.0
-h0_max = 1.0
+h0_min = 0.25
+h0_max = 0.75
 
 SEED_PARAMS = 0
 
@@ -38,6 +38,10 @@ rnn = RNN(
     hidden_size=hidden_size,
     output_size=output_size,
     train_seq_length=train_seq_length,
+    hidden_activation_fn=sigmoid,
+    hidden_activation_fn_grad=sigmoid_grad,
+    output_activation_fn=sigmoid,
+    output_activation_fn_grad=sigmoid_grad,
     seed=SEED_PARAMS,
 )
 

@@ -15,7 +15,7 @@ SAVE = True
 
 n_epochs = 1000
 n_batch_samples = 16
-learning_rate = 0.0001 * n_batch_samples
+learning_rate = 0.001 * n_batch_samples
 
 data_name = "two_circles_opp"
 
@@ -29,8 +29,8 @@ output_size = 2
 
 train_seq_length = 100
 
-h0_min = 0.0
-h0_max = 1.0
+h0_min = 0.25
+h0_max = 0.75
 
 SEED_PARAMS = 0
 
