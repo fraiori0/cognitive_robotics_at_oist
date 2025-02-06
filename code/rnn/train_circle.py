@@ -14,20 +14,20 @@ os.environ["JAX_TRACEBACK_FILTERING"] = "off"
 SAVE = True
 
 n_epochs = 1000
-n_batch_samples = 10
-learning_rate = 0.04
+n_batch_samples = 32
+learning_rate = 0.0001 * n_batch_samples
 
-data_name = "eight"
+data_name = "two_circles_opp"
 
 """------------------"""
 """ Model """
 """------------------"""
 
 input_size = 2
-hidden_size = 8
+hidden_size = 16
 output_size = 2
 
-train_seq_length = 50
+train_seq_length = 100
 
 SEED_PARAMS = 1
 
@@ -36,6 +36,10 @@ rnn = RNN(
     hidden_size=hidden_size,
     output_size=output_size,
     train_seq_length=train_seq_length,
+    hidden_activation_fn=sigmoid,
+    hidden_activation_fn_grad=sigmoid_grad,
+    output_activation_fn=sigmoid,
+    output_activation_fn_grad=sigmoid_grad,
     seed=SEED_PARAMS,
 )
 
@@ -153,6 +157,9 @@ print(f"\tShape of the forward pass")
 print(f"\t\txs, {xs.shape}")
 for k in zs.keys():
     print(f"\t\t{k}, {zs[k].shape}")
+    # print also if there is any nan or inf
+    if np.isnan(zs[k]).any() or np.isinf(zs[k]).any():
+        raise ValueError(f"\t\t{k}, nan or inf")
 
 
 # test backpropagation
@@ -165,6 +172,9 @@ print(f"\tShape of gradients")
 for k in w_grad.keys():
     for kk in w_grad[k].keys():
         print(f"\t\t{k}, {kk}, {w_grad[k][kk].shape}")
+    # print also if there is any nan or inf
+    if np.isnan(w_grad[k][kk]).any() or np.isinf(w_grad[k][kk]).any():
+        raise ValueError(f"\t\t{k}, nan or inf")
 
 # test params update
 print("\nTesting params update")
@@ -176,8 +186,18 @@ print(f"\tShape of params after update")
 for k in new_params.keys():
     for kk in new_params[k].keys():
         print(f"\t\t{k}, {kk}, {new_params[k][kk].shape}")
+    # print also if there is any nan or inf
+    if np.isnan(new_params[k][kk]).any() or np.isinf(new_params[k][kk]).any():
+        raise ValueError(f"\t\t{k}, nan or inf")
 
-# exit()
+
+# concatenate the mini-sequences
+X = np.concatenate([traj_seq["x"] for traj_seq in ps_dict.values()], axis=0)
+Y = np.concatenate([traj_seq["y"] for traj_seq in ps_dict.values()], axis=0)
+
+print(f"\nData concatenated, shape of whole dataset:")
+print(f"\tX: {X.shape}")
+print(f"\tY: {Y.shape}")
 
 
 """------------------"""
@@ -193,15 +213,15 @@ try:
 
         # shuffle the sequences
         key, _ = jax.random.split(key)
-        idx = jax.random.permutation(
-            key, np.arange(ps_dict[training_sequence]["x"].shape[0])
-        )
+        idx = jax.random.permutation(key, np.arange(X.shape[0]))
 
-        X = ps_dict[training_sequence]["x"][idx]
-        Y = ps_dict[training_sequence]["y"][idx]
+        X = X[idx]
+        Y = Y[idx]
 
         # iterate over the training sequences in mini-batches
-        for i_start in range(0, X.shape[0], n_batch_samples):
+        for nb, i_start in enumerate(range(0, X.shape[0], n_batch_samples)):
+
+            # print(f"\tBatch {nb}")
 
             # print(i_start)
 
@@ -222,8 +242,24 @@ try:
             # forward pass
             zs = forward_train_jit(rnn.params, xs, h0)
 
+            # # check for nan
+            # for k in zs.keys():
+            #     if np.isnan(zs[k]).any() or np.isinf(zs[k]).any():
+            #         print(zs["z_hx"])
+            #         print(zs["z_hx"].mean())
+            #         print(zs["z_hx"].max())
+            #         print(zs["z_hx"].min())
+            #         raise ValueError(f"\t\t{k}, nan or inf")
+
             # backpropagation
             w_grad = backprop_jit(rnn.params, zs, xs, ys_target)
+
+            # # print the maximum and minimum of all gradient for each key
+            # for k in w_grad.keys():
+            #     for kk in w_grad[k].keys():
+            #         print(
+            #             f"\t\t{k}, {kk}, {w_grad[k][kk].max()}, {w_grad[k][kk].min()}"
+            #         )
 
             # update the weights
             rnn.params = update_weights_jit(rnn.params, w_grad, learning_rate)

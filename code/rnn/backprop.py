@@ -13,6 +13,42 @@ def sigmoid_grad(x):
     return sigmoid(x) * (1 - sigmoid(x))
 
 
+# tanh
+def tanh(x):
+    return np.tanh(x)
+
+
+def tanh_grad(x):
+    return 1 - np.tanh(x) ** 2
+
+
+# sin function
+def sin(x):
+    return np.sin(x)
+
+
+def sin_grad(x):
+    return np.cos(x)
+
+
+# cos function
+def cos(x):
+    return np.cos(x)
+
+
+def cos_grad(x):
+    return -np.sin(x)
+
+
+# identity
+def identity(x):
+    return x
+
+
+def identity_grad(x):
+    return np.ones_like(x)
+
+
 # loss function squared error
 def loss(y_true, y_pred):
     return ((y_true - y_pred) ** 2).sum(axis=-1)
@@ -31,14 +67,27 @@ class RNN:
         input_size,
         hidden_size,
         output_size,
+        hidden_activation_fn=sigmoid,
+        hidden_activation_fn_grad=sigmoid_grad,
+        output_activation_fn=sigmoid,
+        output_activation_fn_grad=sigmoid_grad,
         train_seq_length=10,
         seed=0,
     ):
+        # network sizes
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.output_size = output_size
+        # training sequence length (useful to JIT)
         self.train_seq_length = train_seq_length
 
+        # activation functions
+        self.hidden_activation_fn = hidden_activation_fn
+        self.hidden_activation_fn_grad = hidden_activation_fn_grad
+        self.output_activation_fn = output_activation_fn
+        self.output_activation_fn_grad = output_activation_fn_grad
+
+        # random key
         self.key = jax.random.key(seed)
 
         # generate the weights by sampling from the normal distribution
@@ -85,10 +134,10 @@ class RNN:
             z_x = (params["hx"]["kernel_x"][None, :, :] * x[:, t, None, :]).sum(axis=-1)
             z_h = (params["hx"]["kernel_h"][None, :, :] * h[:, None, :]).sum(axis=-1)
             z_hx = z_x + z_h + params["hx"]["bias"]
-            h = sigmoid(z_hx)
+            h = self.hidden_activation_fn(z_hx)
 
             z_y = (params["y"]["kernel"][None, :, :] * h[:, None, :]).sum(axis=-1)
-            y = sigmoid(z_y + params["y"]["bias"])
+            y = self.output_activation_fn(z_y + params["y"]["bias"])
 
             # append all terms
             zs["z_h"].append(z_h)
@@ -116,10 +165,10 @@ class RNN:
         z_x = (params["hx"]["kernel_x"] * x[:, None, :]).sum(axis=-1)
         z_h = (params["hx"]["kernel_h"] * h[:, None, :]).sum(axis=-1)
         z_hx = z_x + z_h + params["hx"]["bias"]
-        h = sigmoid(z_hx)
+        h = self.hidden_activation_fn(z_hx)
 
         z_y = (params["y"]["kernel"] * h[:, None, :]).sum(axis=-1)
-        y = sigmoid(z_y + params["y"]["bias"])
+        y = self.output_activation_fn(z_y + params["y"]["bias"])
 
         return y, h
 
@@ -145,7 +194,7 @@ class RNN:
 
         # compute output errors at each time step
         # shape = (batch_size, train_seq_length, output_size)
-        delta_y = loss_grad(y_true, zs["y"]) * sigmoid_grad(zs["z_y"])
+        delta_y = loss_grad(y_true, zs["y"]) * self.output_activation_fn_grad(zs["z_y"])
 
         # initialize the hidden state error
         # shape = (batch_size, hidden_size), and then we compute one for each time step
@@ -163,7 +212,7 @@ class RNN:
                 + (params["hx"]["kernel_h"][None, :, :] * delta_h_t[:, :, None]).sum(
                     axis=1
                 )
-            ) * sigmoid_grad(zs["z_hx"][:, t, :])
+            ) * self.hidden_activation_fn_grad(zs["z_hx"][:, t, :])
 
             # update the gradients
             # note, that zs["h"][:, t, :] is the hidden state at time step t-1

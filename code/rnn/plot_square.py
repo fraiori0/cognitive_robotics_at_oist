@@ -13,12 +13,12 @@ os.environ["JAX_TRACEBACK_FILTERING"] = "off"
 
 SAVE = True
 
-data_name = "two_circles_opp"
-hidden_size = 16
+data_name = "two_circles"
+hidden_size = 8
 
 SEED = 0
 key = jax.random.key(SEED)
-n_steps = 200
+n_steps = 30
 
 """------------------"""
 """ Model """
@@ -60,7 +60,7 @@ if os.path.exists(os.path.join(model_path, f"{model_name}_params.pkl")):
         model_info_dict = json.load(f)
 else:
     print("Could not load parameters")
-    raise ValueError("Could not load parameters")
+    raise ValueError
 
 for k in rnn.params.keys():
     for kk in rnn.params[k].keys():
@@ -72,15 +72,19 @@ for k in rnn.params.keys():
 """ Generate trajectories using the model """
 """------------------"""
 
-# sample points homogenously in x-y, range 0-1
-x0 = np.array(
-    np.meshgrid(
-        np.linspace(0, 1, 5),
-        np.linspace(0, 1, 5),
-    )
-).T.reshape(-1, 2)
+theta = np.linspace(0, 2 * np.pi, 16)
+r = np.linspace(0.1, 0.5, 16)
+c = np.array([0.5, 0.5])
 
-# generate initial hidden states
+x0 = np.concatenate(
+    [
+        (r[:, None] * np.cos(theta)[None, :] + c[0])[..., None],
+        (r[:, None] * np.sin(theta)[None, :] + c[1])[..., None],
+    ],
+    axis=-1,
+).reshape(-1, 2)
+
+
 h0 = rnn.gen_hidden_state(key, x0.shape[0])
 
 forward_jit = jit(rnn.forward)
@@ -133,19 +137,9 @@ fig.update_layout(
     yaxis_title="y",
     # set square aspect ratio
     xaxis=dict(scaleanchor="y", scaleratio=1),
-    # and axis ranges in 0-1
+    # amnd axis ranges in 0-1
     xaxis_range=[0, 1],
     yaxis_range=[0, 1],
-    # set white background and style
-    # plot_bgcolor="white",
-    template="plotly_white",
 )
-
-
-# add ticks at 0.1 marks, both on x-y axis, and only in the range 0-1
-fig.update_xaxes(tick0=0, dtick=0.1, range=[0, 1])
-fig.update_yaxes(tick0=0, dtick=0.1, range=[0, 1])
-# set tick color to black
-
 
 fig.show()
