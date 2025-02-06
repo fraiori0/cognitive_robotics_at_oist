@@ -13,7 +13,7 @@ os.environ["JAX_TRACEBACK_FILTERING"] = "off"
 
 SAVE = True
 
-data_name = "two_circles_opp"
+data_name = "two_circles"
 hidden_size = 16
 
 SEED = 0
@@ -25,10 +25,11 @@ n_steps = 200
 """------------------"""
 
 input_size = 2
-
 output_size = 2
+train_seq_length = 100
 
-train_seq_length = 9
+h0_min = 0.0
+h0_max = 1.0
 
 SEED_PARAMS = 0
 
@@ -75,13 +76,13 @@ for k in rnn.params.keys():
 # sample points homogenously in x-y, range 0-1
 x0 = np.array(
     np.meshgrid(
-        np.linspace(0, 1, 5),
-        np.linspace(0, 1, 5),
+        np.linspace(0, 1, 11),
+        np.linspace(0, 1, 11),
     )
 ).T.reshape(-1, 2)
 
 # generate initial hidden states
-h0 = rnn.gen_hidden_state(key, x0.shape[0])
+h0 = rnn.gen_hidden_state_uniform(key, x0.shape[0], h0_min, h0_max)
 
 forward_jit = jit(rnn.forward)
 

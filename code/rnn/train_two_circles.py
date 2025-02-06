@@ -14,8 +14,8 @@ os.environ["JAX_TRACEBACK_FILTERING"] = "off"
 SAVE = True
 
 n_epochs = 1000
-n_batch_samples = 16
-learning_rate = 0.0001 * n_batch_samples
+n_batch_samples = 32
+learning_rate = 0.001 * n_batch_samples
 
 data_name = "two_circles_opp"
 
@@ -24,15 +24,12 @@ data_name = "two_circles_opp"
 """------------------"""
 
 input_size = 2
-hidden_size = 16
+hidden_size = 4
 output_size = 2
 
 train_seq_length = 100
 
-h0_min = 0.0
-h0_max = 1.0
-
-SEED_PARAMS = 0
+SEED_PARAMS = 1
 
 rnn = RNN(
     input_size=input_size,
@@ -112,9 +109,9 @@ ps_dict = {k: np.array(data[k]["p"]) for k in data.keys()}
 print(f"\tApplying moving window to the data")
 
 for k in ps_dict.keys():
-
     # for each of the data files, extract the sequences and create a moving window
     # version of them, which will provide the small training sequences
+
     ps = ps_dict[k]
 
     # cut the data to the maximum number of steps, taking the central part
@@ -131,15 +128,12 @@ for k in ps_dict.keys():
     ps_dict[k] = {
         "x": ps[idx],
         "y": ps[idx + 1],
-        # add also a number to identify the trajectory file
-        "id": int(k.split("_")[-1]),
     }
 
 # print the length of the sequences for every file
 print(f"\tData processed, the following training sequences are available:")
 for k in ps_dict.keys():
     print(f"\t\t{k}: {ps_dict[k]['x'].shape}")
-    print(f"\t\t\tid: {ps_dict[k]['id']}")
 
 
 """------------------"""
@@ -153,7 +147,7 @@ xs = ps_dict[f"{data_name}_0"]["x"][:n_batch_samples]
 ys_target = ps_dict[f"{data_name}_0"]["y"][:n_batch_samples]
 # initial hidden state
 key = jax.random.key(0)
-h0 = rnn.gen_hidden_state_uniform(key, n_batch_samples, h0_min, h0_max)
+h0 = rnn.gen_hidden_state(key, n_batch_samples)
 forward_train_jit = jit(rnn.forward_train)
 # forward pass
 zs = forward_train_jit(rnn.params, xs, h0)
@@ -197,23 +191,12 @@ for k in new_params.keys():
         raise ValueError(f"\t\t{k}, nan or inf")
 
 # concatenate the mini-sequences
-X = []
-Y = []
-IDS = []
-for k in ps_dict.keys():
-    X.append(ps_dict[k]["x"])
-    Y.append(ps_dict[k]["y"])
-    IDS.append(np.ones(ps_dict[k]["x"].shape[0], dtype=int) * ps_dict[k]["id"])
-
-
-X = np.concatenate(X, axis=0)
-Y = np.concatenate(Y, axis=0)
-IDS = np.concatenate(IDS, axis=0)
+X = np.concatenate([traj_seq["x"] for traj_seq in ps_dict.values()], axis=0)
+Y = np.concatenate([traj_seq["y"] for traj_seq in ps_dict.values()], axis=0)
 
 print(f"\nData concatenated, shape of whole dataset:")
 print(f"\tX: {X.shape}")
 print(f"\tY: {Y.shape}")
-print(f"\tIDS: {IDS.shape}")
 
 
 """------------------"""
@@ -253,7 +236,7 @@ try:
 
             # initial hidden state
             key, _ = jax.random.split(key)
-            h0 = rnn.gen_hidden_state_uniform(key, xs.shape[0], h0_min, h0_max)
+            h0 = rnn.gen_hidden_state(key, xs.shape[0])
 
             # forward pass
             zs = forward_train_jit(rnn.params, xs, h0)
@@ -284,7 +267,7 @@ try:
 
         # initial hidden state
         key, _ = jax.random.split(key)
-        h0 = rnn.gen_hidden_state_uniform(key, X.shape[0], h0_min, h0_max)
+        h0 = rnn.gen_hidden_state(key, X.shape[0])
 
         zs = forward_train_jit(rnn.params, X, h0)
 

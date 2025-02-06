@@ -234,8 +234,13 @@ class RNN:
 
         return grads
 
-    def gen_hidden_state(self, key, batch_size, scale=1.0):
+    def gen_hidden_state_normal(self, key, batch_size, scale=1.0):
         return jax.random.normal(key, (batch_size, self.hidden_size)) * scale
+
+    def gen_hidden_state_uniform(self, key, batch_size, min, max):
+        return jax.random.uniform(
+            key, (batch_size, self.hidden_size), minval=min, maxval=max
+        )
 
     def update_weights(self, params, grads, learning_rate):
         """Update the weights with the gradients using SGD."""
