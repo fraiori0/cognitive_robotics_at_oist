@@ -24,7 +24,7 @@ def tanh_grad(x):
 
 # sin function
 def sin(x):
-    return np.sin(x)
+    return np.sin(x) + 1.0
 
 
 def sin_grad(x):
@@ -33,7 +33,7 @@ def sin_grad(x):
 
 # cos function
 def cos(x):
-    return np.cos(x)
+    return np.cos(x) + 1.0
 
 
 def cos_grad(x):
@@ -131,12 +131,15 @@ class RNN:
 
         for t in range(self.train_seq_length):
 
-            z_x = (params["hx"]["kernel_x"][None, :, :] * x[:, t, None, :]).sum(axis=-1)
-            z_h = (params["hx"]["kernel_h"][None, :, :] * h[:, None, :]).sum(axis=-1)
+            z_x = (params["hx"]["kernel_x"][None, :, :]
+                   * x[:, t, None, :]).sum(axis=-1)
+            z_h = (params["hx"]["kernel_h"][None, :, :]
+                   * h[:, None, :]).sum(axis=-1)
             z_hx = z_x + z_h + params["hx"]["bias"]
             h = self.hidden_activation_fn(z_hx)
 
-            z_y = (params["y"]["kernel"][None, :, :] * h[:, None, :]).sum(axis=-1)
+            z_y = (params["y"]["kernel"][None, :, :]
+                   * h[:, None, :]).sum(axis=-1)
             y = self.output_activation_fn(z_y + params["y"]["bias"])
 
             # append all terms
@@ -194,7 +197,8 @@ class RNN:
 
         # compute output errors at each time step
         # shape = (batch_size, train_seq_length, output_size)
-        delta_y = loss_grad(y_true, zs["y"]) * self.output_activation_fn_grad(zs["z_y"])
+        delta_y = loss_grad(y_true, zs["y"]) * \
+            self.output_activation_fn_grad(zs["z_y"])
 
         # initialize the hidden state error
         # shape = (batch_size, hidden_size), and then we compute one for each time step
@@ -208,7 +212,8 @@ class RNN:
             # note that zs["z_hx"][:, t, :] is the input to the sigmoid function, computed with
             # x(t) and h(t-1) on which we apply a sigmoid to compute h(t)
             delta_h_t = (
-                (params["y"]["kernel"][None, :, :] * delta_y_t[:, :, None]).sum(axis=1)
+                (params["y"]["kernel"][None, :, :]
+                 * delta_y_t[:, :, None]).sum(axis=1)
                 + (params["hx"]["kernel_h"][None, :, :] * delta_h_t[:, :, None]).sum(
                     axis=1
                 )
@@ -219,12 +224,14 @@ class RNN:
             # with respect to the current time step t, as we have the initial hidden state at the beginning
             grads["y"]["kernel"] = (
                 grads["y"]["kernel"]
-                + delta_y_t[:, :, None] * zs["h"][:, t + 1, None, :]  # note the t + 1
+                + delta_y_t[:, :, None] * zs["h"][:,
+                                                  t + 1, None, :]  # note the t + 1
             )
             grads["y"]["bias"] = grads["y"]["bias"] + delta_y_t
 
             grads["hx"]["kernel_x"] = (
-                grads["hx"]["kernel_x"] + delta_h_t[:, :, None] * x[:, t, None, :]
+                grads["hx"]["kernel_x"] +
+                delta_h_t[:, :, None] * x[:, t, None, :]
             )
             grads["hx"]["kernel_h"] = (
                 grads["hx"]["kernel_h"]

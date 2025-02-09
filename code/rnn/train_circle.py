@@ -14,23 +14,41 @@ os.environ["JAX_TRACEBACK_FILTERING"] = "off"
 SAVE = True
 
 n_epochs = 1000
-n_batch_samples = 16
-learning_rate = 0.001 * n_batch_samples
+n_batch_samples = 32
+learning_rate = 0.01  # * n_batch_samples
 
-data_name = "two_circles_opp"
+data_name = "circle"
 
 """------------------"""
 """ Model """
 """------------------"""
 
 input_size = 2
-hidden_size = 16
+hidden_size = 2
 output_size = 2
 
-train_seq_length = 100
+train_seq_length = 50
 
-h0_min = 0.25
-h0_max = 0.75
+h0_min = 0.3  # -0.8  #
+h0_max = 0.7
+
+hidden_activation = "sigmoid"
+output_activation = "sigmoid"
+
+activation_dict = {
+    "sigmoid": {
+        "fn": sigmoid,
+        "grad": sigmoid_grad,
+    },
+    "tanh": {
+        "fn": tanh,
+        "grad": tanh_grad,
+    },
+    "sin": {
+        "fn": sin,
+        "grad": sin_grad,
+    },
+}
 
 SEED_PARAMS = 0
 
@@ -39,9 +57,11 @@ rnn = RNN(
     hidden_size=hidden_size,
     output_size=output_size,
     train_seq_length=train_seq_length,
-    hidden_activation_fn=sigmoid,
+    hidden_activation_fn=sigmoid,  # activation_dict[hidden_activation]["fn"],
+    # activation_dict[hidden_activation]["grad"],
     hidden_activation_fn_grad=sigmoid_grad,
-    output_activation_fn=sigmoid,
+    output_activation_fn=sigmoid,  # activation_dict[output_activation]["fn"],
+    # activation_dict[output_activation]["grad"],
     output_activation_fn_grad=sigmoid_grad,
     seed=SEED_PARAMS,
 )
@@ -71,10 +91,21 @@ model_info_dict = {
     "output_size": output_size,
     "train_seq_length": train_seq_length,
     "SEED_PARAMS": SEED_PARAMS,
+    "h0_min": h0_min,
+    "h0_max": h0_max,
+    "hidden_activation": hidden_activation,
+    "output_activation": output_activation,
 }
 
 name_suffix = f"_{data_name}_{hidden_size}"
 model_name = "rnn" + name_suffix
+
+# try to load the model's parameters, if they exist
+if os.path.exists(os.path.join(model_path, f"{model_name}_params.pkl")):
+    with open(os.path.join(model_path, f"{model_name}_params.pkl"), "rb") as f:
+        rnn.params = pickle.load(f)
+    # with open(os.path.join(model_path, f"{model_name}_info.json"), "r") as f:
+    #     model_info_dict = json.load(f)
 
 
 """------------------"""
@@ -93,7 +124,8 @@ data_folder = os.path.join(
 )
 
 # load the data, all file in the targe folder with the name {data_name}_N*.json, where N is an integer
-data_files = [f for f in os.listdir(data_folder) if f.startswith(f"{data_name}_")]
+data_files = [f for f in os.listdir(
+    data_folder) if f.startswith(f"{data_name}_")]
 
 # import the data
 data = {}
@@ -106,6 +138,15 @@ for f in data_files:
 print(f"\tData imported, found >> {len(data)} << files")
 
 ps_dict = {k: np.array(data[k]["p"]) for k in data.keys()}
+
+# print minimum and maximum of each component of each trajectory
+for k in ps_dict.keys():
+    print(f"\t{k}")
+    print(
+        f"\t\tX: min {ps_dict[k][:,0].min(axis=0)}, max {ps_dict[k][:,0].max(axis=0)}")
+    print(
+        f"\t\tY: min {ps_dict[k][:,1].min(axis=0)}, max{ps_dict[k][:,1].max(axis=0)}")
+
 
 # for each of the data files, extract the sequences and create a moving window
 # version of them, which will provide the small training sequences
@@ -127,7 +168,8 @@ for k in ps_dict.keys():
     n_steps = ps.shape[0]
 
     # apply moving window
-    idx = np.arange(n_steps - train_seq_length)[:, None] + np.arange(train_seq_length)
+    idx = np.arange(
+        n_steps - train_seq_length)[:, None] + np.arange(train_seq_length)
     ps_dict[k] = {
         "x": ps[idx],
         "y": ps[idx + 1],

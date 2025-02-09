@@ -7,7 +7,7 @@ import numpy as np
 
 
 SAVE = True
-save_name = "two_circles_opp"
+save_name = "circle"
 save_path = os.path.join(
     os.path.dirname(os.path.realpath(__file__)),
     os.pardir,
@@ -59,7 +59,8 @@ class MouseRecorder:
             # append the new position and timestamp
             self.recordings[-1].append((xm, ym, timestamp))
             # draw the new position
-            self.canvas.create_rectangle(xm - 2, ym - 2, xm + 2, ym + 2, fill="black")
+            self.canvas.create_rectangle(
+                xm - 2, ym - 2, xm + 2, ym + 2, fill="black")
             # if we are past half of the max length, turn window backgropund to yellow
             l = len(self.recordings[-1])
             if (l > self.max_length / 2) and (l < self.max_length):

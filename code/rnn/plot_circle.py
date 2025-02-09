@@ -13,8 +13,8 @@ os.environ["JAX_TRACEBACK_FILTERING"] = "off"
 
 SAVE = True
 
-data_name = "two_circles_opp"
-hidden_size = 16
+data_name = "circle"
+hidden_size = 2
 
 SEED = 0
 key = jax.random.key(SEED)
