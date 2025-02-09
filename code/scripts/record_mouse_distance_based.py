@@ -7,7 +7,7 @@ import numpy as np
 
 
 SAVE = True
-save_name = "circle"
+save_name = "eight"
 save_path = os.path.join(
     os.path.dirname(os.path.realpath(__file__)),
     os.pardir,
@@ -144,7 +144,7 @@ app = MouseRecorder(
     save_path=save_path,
     save_name=save_name,
     update_frequency=30,
-    distance_threshold=0.05,
+    distance_threshold=0.1,
     max_length=500,
     save=SAVE,
 )

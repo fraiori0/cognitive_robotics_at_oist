@@ -7,7 +7,7 @@ import numpy as np
 
 
 SAVE = True
-save_name = "circle"
+save_name = "eight"
 save_path = os.path.join(
     os.path.dirname(os.path.realpath(__file__)),
     os.pardir,
@@ -34,6 +34,7 @@ class MouseRecorder:
         self.recordings = []
         self.max_length = max_length
 
+        self.save = save
         self.save_path = save_path
         self.save_name = save_name
 
@@ -87,28 +88,31 @@ class MouseRecorder:
 
     def on_closing(self):
         # Save the positions and timestamps
-        for i, sequence in enumerate(self.recordings):
-            # converting to numpy and back to a list is not very efficient
-            # but slicing with indexes is very convenient on numpy arrays
-            # and also normalizing is easier
-            sequence = np.array(sequence)
-            p = sequence[:, :2]
+        if self.save:
+            for i, sequence in enumerate(self.recordings):
+                # converting to numpy and back to a list is not very efficient
+                # but slicing with indexes is very convenient on numpy arrays
+                # and also normalizing is easier
+                sequence = np.array(sequence)
+                p = sequence[:, :2]
 
-            # revert y coordinates, those in the windows are top to bottom
-            # but would like them to be the opposite
-            p[:, 1] = self.canvas.winfo_height() - p[:, 1]
+                # revert y coordinates, those in the windows are top to bottom
+                # but would like them to be the opposite
+                p[:, 1] = self.canvas.winfo_height() - p[:, 1]
 
-            # normalize in the range [0, 1] but keeping the aspect ratio
-            p = p / max(self.canvas.winfo_width(), self.canvas.winfo_height())
+                # normalize in the range [0, 1] but keeping the aspect ratio
+                p = p / max(self.canvas.winfo_width(),
+                            self.canvas.winfo_height())
 
-            seq_dict = {
-                "p": p.tolist(),
-                "t": sequence[:, 2].tolist(),
-            }
-            with open(
-                os.path.join(self.save_path, f"{self.save_name}_{i}.json"), "w"
-            ) as f:
-                json.dump(seq_dict, f)
+                seq_dict = {
+                    "p": p.tolist(),
+                    "t": sequence[:, 2].tolist(),
+                }
+                with open(
+                    os.path.join(self.save_path,
+                                 f"{self.save_name}_{i}.json"), "w"
+                ) as f:
+                    json.dump(seq_dict, f)
         # close the window
         self.root.destroy()
 

@@ -15,8 +15,8 @@ os.environ["JAX_TRACEBACK_FILTERING"] = "off"
 
 SAVE = True
 
-data_name = "circle"
-hidden_size = 2
+data_name = "two_circles_opp"
+hidden_size = 16
 
 SEED = 3
 key = jax.random.key(SEED)
@@ -73,16 +73,15 @@ rnn = RNN(
     hidden_size=hidden_size,
     output_size=model_info_dict["output_size"],
     train_seq_length=model_info_dict["train_seq_length"],
-    # activation_dict[model_info_dict["hidden_activation"]]["fn"],
-    hidden_activation_fn=sigmoid,
-    # activation_dict[model_info_dict["hidden_activation"]]["grad"],
-    hidden_activation_fn_grad=sigmoid_grad,
-    # activation_dict[model_info_dict["output_activation"]]["fn"],
-    output_activation_fn=sigmoid,
-    # activation_dict[model_info_dict["output_activation"]]["grad"],
-    output_activation_fn_grad=sigmoid_grad,
+    hidden_activation_fn=activation_dict[model_info_dict["hidden_activation"]]["fn"],
+    hidden_activation_fn_grad=activation_dict[model_info_dict["hidden_activation"]]["grad"],
+    output_activation_fn=activation_dict[model_info_dict["output_activation"]]["fn"],
+    output_activation_fn_grad=activation_dict[model_info_dict["output_activation"]]["grad"],
     seed=SEED_PARAMS,
 )
+
+# Set parameters
+rnn.params = params
 
 
 for k in rnn.params.keys():
@@ -201,6 +200,8 @@ fig.update_yaxes(tick0=0, dtick=0.1, range=[0, 1])
 
 
 fig.show()
+
+# exit()
 
 
 """------------------"""

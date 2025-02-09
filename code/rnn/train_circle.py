@@ -15,19 +15,19 @@ SAVE = True
 
 n_epochs = 1000
 n_batch_samples = 32
-learning_rate = 0.01  # * n_batch_samples
+learning_rate = 0.0002 * n_batch_samples
 
-data_name = "circle"
+data_name = "two_circles_opp"
 
 """------------------"""
 """ Model """
 """------------------"""
 
 input_size = 2
-hidden_size = 2
+hidden_size = 16
 output_size = 2
 
-train_seq_length = 50
+train_seq_length = 150
 
 h0_min = 0.3  # -0.8  #
 h0_max = 0.7
@@ -50,19 +50,17 @@ activation_dict = {
     },
 }
 
-SEED_PARAMS = 0
+SEED_PARAMS = 1
 
 rnn = RNN(
     input_size=input_size,
     hidden_size=hidden_size,
     output_size=output_size,
     train_seq_length=train_seq_length,
-    hidden_activation_fn=sigmoid,  # activation_dict[hidden_activation]["fn"],
-    # activation_dict[hidden_activation]["grad"],
-    hidden_activation_fn_grad=sigmoid_grad,
-    output_activation_fn=sigmoid,  # activation_dict[output_activation]["fn"],
-    # activation_dict[output_activation]["grad"],
-    output_activation_fn_grad=sigmoid_grad,
+    hidden_activation_fn=activation_dict[hidden_activation]["fn"],
+    hidden_activation_fn_grad=activation_dict[hidden_activation]["grad"],
+    output_activation_fn=activation_dict[output_activation]["fn"],
+    output_activation_fn_grad=activation_dict[output_activation]["grad"],
     seed=SEED_PARAMS,
 )
 
