@@ -63,15 +63,27 @@ if os.path.exists(os.path.join(model_path, f"{model_name}_params.pkl")):
         rnn.params = pickle.load(f)
     with open(os.path.join(model_path, f"{model_name}_info.json"), "r") as f:
         model_info_dict = json.load(f)
+    # import initial hidden states
+    with open(os.path.join(model_path, f"{model_name}_h0.pkl"), "rb") as f:
+        hidden_states = pickle.load(f)
 else:
     print("Could not load parameters")
     raise ValueError("Could not load parameters")
 
+print(f"\nModel loaded, {model_name}")
+
+print(f"\nParams shape:")
 for k in rnn.params.keys():
     for kk in rnn.params[k].keys():
-        print(f"{k}, {kk}, {rnn.params[k][kk].shape}")
+        print(f"\t{k}, {kk}, {rnn.params[k][kk].shape}")
 
-# exit()
+print(f"\nInitial hidden states:")
+for k in hidden_states.keys():
+    print(f"\t{k}, ID: {hidden_states[k]['id']}")
+    print(f"\t\tX0: {hidden_states[k]['x0'].shape}")
+    print(f"\t\tH0: {hidden_states[k]['h0'].shape}")
+
+exit()
 
 """------------------"""
 """ Generate trajectories using the model """
