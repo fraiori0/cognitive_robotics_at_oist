@@ -11,17 +11,19 @@ import pickle
 
 os.environ["JAX_TRACEBACK_FILTERING"] = "off"
 
-SAVE = False
+SAVE = True
 
-n_epochs = 1000
-n_batch_samples = 32
-learning_rate = 1.0e-4 * n_batch_samples
+n_epochs = 10000
+n_batch_samples = 16
+learning_rate = 1.0e-3
 
-p_input_ratio = 1.0
+n_epochs_checkpoint = 1000
 
-moving_window_step = 2
+p_input_ratio = 0.97
 
-data_name = "circle"
+moving_window_step = 10
+
+data_name = "two_circles_opp"
 test_name = "h0"
 
 """------------------"""
@@ -29,15 +31,15 @@ test_name = "h0"
 """------------------"""
 
 input_size = 2
-hidden_size = 2
+hidden_size = 16
 output_size = 2
 
-train_seq_length = 100
+train_seq_length = 60
 
 # note, these bounds should depend on the activation function
 # of the hidden layer, to make sense
-h0_min = 0.3  # -0.8  #
-h0_max = 0.7
+h0_min = 0.0  # -0.8  #
+h0_max = 1.0
 
 hidden_activation = "sigmoid"
 output_activation = "sigmoid"
@@ -54,6 +56,10 @@ activation_dict = {
     "sin": {
         "fn": sin,
         "grad": sin_grad,
+    },
+    "relu": {
+        "fn": relu,
+        "grad": relu_grad,
     },
 }
 
@@ -184,20 +190,22 @@ model_info_dict = {
     "output_activation": output_activation,
 }
 
-# generate a hidden state for each starting point of the sequences
+# dictionary containing the training history
+history = {
+    "loss": [],
+}
+
+# generate a single hidden state for each sequence
 # we will back-propagate gradients to optimize also these initial hidden states
 key = jax.random.key(0)
-# the initiali hidden states will be a dictionary with the same keys as the ps_dict
-# and each hideen state will be associated to the first (in time) x of the corresponding sequence
 hidden_states = {}
 for k in ps_dict.keys():
     key, _ = jax.random.split(key)
-    hidden_states[k] = {}
-    hidden_states[k]["x0"] = ps_dict[k]["x"][:, 0]
-    hidden_states[k]["h0"] = rnn.gen_hidden_state_uniform(
-        key, hidden_states[k]["x0"].shape[0], h0_min, h0_max
-    )
-    hidden_states[k]["id"] = ps_dict[k]["id"]
+    h0 = rnn.gen_hidden_state_uniform(key, 1, h0_min, h0_max)
+    hidden_states[k] = {
+        "id": ps_dict[k]["id"],
+        "h0": h0,
+    }
 
 name_suffix = f"_{data_name}_{hidden_size}_{test_name}"
 model_name = "rnn" + name_suffix
@@ -211,11 +219,19 @@ if os.path.exists(os.path.join(model_path, f"{model_name}_params.pkl")):
     with open(os.path.join(model_path, f"{model_name}_info.json"), "r") as f:
         imported_model_info_dict = json.load(f)
         # the model_info_dict is not overwritten, but checked for consistency
-        for k in model_info_dict.keys():
+        for k in ["hidden_size", "hidden_activation", "output_activation"]:
             assert model_info_dict[k] == imported_model_info_dict[k]
     # and also the initial hidden states
     with open(os.path.join(model_path, f"{model_name}_h0.pkl"), "rb") as f:
         hidden_states = pickle.load(f)
+        # if there was only one trajectory, add a leading dimension to the hidden states
+        for k in hidden_states.keys():
+            if len(hidden_states[k]["h0"].shape) == 1:
+                hidden_states[k]["h0"] = hidden_states[k]["h0"][None, :]
+    # and also the training history, if it exists
+    if os.path.exists(os.path.join(model_path, f"{model_name}_history.pkl")):
+        with open(os.path.join(model_path, f"{model_name}_history.pkl"), "rb") as f:
+            history = pickle.load(f)
 else:
     print(f"\nTraining model from scratch")
 
@@ -229,9 +245,9 @@ for k in rnn.params.keys():
 print(f"\nInitial hidden states:")
 for k in hidden_states.keys():
     print(f"\t{k}, ID: {hidden_states[k]['id']}")
-    print(f"\t\tX0: {hidden_states[k]['x0'].shape}")
     print(f"\t\tH0: {hidden_states[k]['h0'].shape}")
 
+# exit()
 
 """------------------"""
 """ Create single dataset """
@@ -242,29 +258,29 @@ for k in hidden_states.keys():
 X = []
 Y = []
 IDS = []
-X0 = []
-H0 = []
+# this array will not be shuffled, it's indexes correspond to the hidden_states for
+# trajectories of such ID
+H0_map = []
 for k in ps_dict.keys():
     X.append(ps_dict[k]["x"])
     Y.append(ps_dict[k]["y"])
     IDS.append(np.ones(ps_dict[k]["x"].shape[0], dtype=int) * ps_dict[k]["id"])
-    X0.append(hidden_states[k]["x0"])
-    H0.append(hidden_states[k]["h0"])
+    H0_map.append(hidden_states[k]["h0"])
 
 
 X = np.concatenate(X, axis=0)
 Y = np.concatenate(Y, axis=0)
 IDS = np.concatenate(IDS, axis=0)
-X0 = np.concatenate(X0, axis=0)
-H0 = np.concatenate(H0, axis=0)
+H0_map = np.concatenate(H0_map, axis=0)
 
 
 print(f"\nData concatenated, shape of whole dataset:")
 print(f"\tX: {X.shape}")
 print(f"\tY: {Y.shape}")
 print(f"\tIDS: {IDS.shape}")
-print(f"\tH0: {H0.shape}")
+print(f"\tH0_map: {H0_map.shape}")
 
+# exit()
 
 """------------------"""
 """ Test the forward and backprop """
@@ -275,7 +291,8 @@ print("\nTesting forward_training pass")
 
 xs = X[:n_batch_samples]
 ys_target = Y[:n_batch_samples]
-h0 = H0[:n_batch_samples]
+ids = IDS[:n_batch_samples]
+h0 = H0_map[ids]
 
 # with JIT is much much faster, but intense to compile depending on how many time-step we have
 # in the forward pass
@@ -326,10 +343,23 @@ for k in new_params.keys():
 
 # exit()
 
+"""------------------"""
+""" Checkpointing """
+"""------------------"""
+
+# create checkpoint folder inside the saving folder
+checkpoint_path = os.path.join(model_path, "checkpoints")
+if not os.path.exists(checkpoint_path):
+    os.makedirs(checkpoint_path)
+
+# number of epochs for which the model has already been trained
+n_epochs_pretrained = len(history["loss"])
+
 
 """------------------"""
 """ Training """
 """------------------"""
+
 
 try:
     for ne in range(n_epochs):
@@ -344,8 +374,8 @@ try:
         X = X[idx]
         Y = Y[idx]
         IDS = IDS[idx]
-        X0 = X0[idx]
-        H0 = H0[idx]
+        # note, we don't shuffle the H0_map, it's indexes correspond to the hidden_states for
+        # trajectories of such ID
 
         # iterate over the training sequences in mini-batches
         for nb, i_start in enumerate(range(0, X.shape[0], n_batch_samples)):
@@ -358,7 +388,8 @@ try:
 
             xs = X[i_start:i_stop]
             ys_target = Y[i_start:i_stop]
-            h0 = H0[i_start:i_stop]
+            ids = IDS[i_start:i_stop]
+            h0 = H0_map[ids]
 
             # print(xs.shape)
             # print(ys_target.shape)
@@ -373,6 +404,10 @@ try:
             key, _ = jax.random.split(key)
             zs = forward_train_jit(key, rnn.params, xs, h0)
 
+            # # compute loss of this batch
+            # l = loss(ys_target, zs["y"])
+            # print(f"\t\t{nb}, Loss: {l.mean()}")
+
             # # check for nan
             # for k in zs.keys():
             #     if np.isnan(zs[k]).any() or np.isinf(zs[k]).any():
@@ -385,6 +420,9 @@ try:
             # backpropagation
             w_grad = backprop_jit(rnn.params, zs, ys_target)
 
+            # print(w_grad["hx"]["h0"].mean(axis=0))
+            # exit()
+
             # # print the maximum and minimum of all gradient for each key
             # for k in w_grad.keys():
             #     for kk in w_grad[k].keys():
@@ -396,15 +434,42 @@ try:
             rnn.params = update_weights_jit(rnn.params, w_grad, learning_rate)
 
             # update the initial hidden states
-            h0_new = h0 - w_grad["hx"]["h0"] * learning_rate
-            H0 = H0.at[i_start:i_stop].set(h0_new)
+            # NOTE we have to use the gradients only from trajectories with the same id
+            for k in hidden_states.keys():
+                # get the indexes of the trajectories with the same id
+                idx_map = hidden_states[k]["id"]
+                h0_mask = ids == idx_map
+                # skip if mask is all False
+                if not h0_mask.any():
+                    continue
+                # take the mean of the gradients for the hidden states
+                h0_grad = w_grad["hx"]["h0"][h0_mask].mean(axis=0)
+                # print(f"\t\t  {k}, {h0_grad}")
+                # print(f"\t\t  {h0_mask}")
+                # update the hidden state
+                H0_map = H0_map.at[idx_map].set(
+                    H0_map[idx_map] - learning_rate * h0_grad
+                )
+            # clip the hidden state in the limits, which should
+            # depend on the activation function
+            H0_map = np.clip(H0_map, h0_min, h0_max)
+
+            # # check for any nan
+            # if np.isnan(H0_map).any() or np.isinf(H0_map).any():
+            #     # print(H0_map)
+            #     # print(w_grad["hx"]["h0"])
+            #     raise ValueError(f"\t\tH0_map, nan or inf")
+
+        # print(f"\tH0_map, {H0_map.shape}")
 
         # compute and print mean loss over all sequences
 
         # initial hidden state
         key, _ = jax.random.split(key)
-        zs = forward_train_jit(key, rnn.params, X, H0)
+        zs = forward_train_jit(key, rnn.params, X, H0_map[IDS])
         l = loss(Y, zs["y"])
+        # store the loss in the history
+        history["loss"].append(l.mean())
 
         print(f"\tLoss: {l[:, :].mean()}")
 
@@ -417,11 +482,45 @@ try:
             with open(os.path.join(model_path, f"{model_name}_h0.pkl"), "wb") as f:
                 # update the hidden_states dictionary
                 for k in hidden_states.keys():
-                    # NOTE: we are extracting using IDS, so the x0 and h0 stay aligned as in the original dataset
-                    hidden_states[k]["x0"] = X0[IDS == hidden_states[k]["id"]]
-                    hidden_states[k]["h0"] = H0[IDS == hidden_states[k]["id"]]
+                    idx = hidden_states[k]["id"]
+                    hidden_states[k]["h0"] = H0_map[idx]
                 pickle.dump(hidden_states, f)
+            with open(os.path.join(model_path, f"{model_name}_history.pkl"), "wb") as f:
+                pickle.dump(history, f)
 
+        # save the parameters every n_epochs_checkpoint epochs
+        n_tot_training_epochs = n_epochs_pretrained + ne
+        if (
+            SAVE
+            and (n_tot_training_epochs % n_epochs_checkpoint == 0)
+            and (n_tot_training_epochs > 0)
+        ):
+
+            with open(
+                os.path.join(
+                    checkpoint_path, f"{model_name}_{n_tot_training_epochs}_params.pkl"
+                ),
+                "wb",
+            ) as f:
+                pickle.dump(rnn.params, f)
+            with open(
+                os.path.join(
+                    checkpoint_path, f"{model_name}_{n_tot_training_epochs}_h0.pkl"
+                ),
+                "wb",
+            ) as f:
+                # update the hidden_states dictionary
+                for k in hidden_states.keys():
+                    idx = hidden_states[k]["id"]
+                    hidden_states[k]["h0"] = H0_map[idx]
+                pickle.dump(hidden_states, f)
+            with open(
+                os.path.join(
+                    checkpoint_path, f"{model_name}_{n_tot_training_epochs}_history.pkl"
+                ),
+                "wb",
+            ) as f:
+                pickle.dump(history, f)
 
 except KeyboardInterrupt:
     pass
@@ -436,7 +535,6 @@ if SAVE:
     with open(os.path.join(model_path, f"{model_name}_h0.pkl"), "wb") as f:
         # update the hidden_states dictionary
         for k in hidden_states.keys():
-            # NOTE: we are extracting using IDS, so the x0 and h0 stay aligned as in the original dataset
-            hidden_states[k]["x0"] = X0[IDS == hidden_states[k]["id"]]
-            hidden_states[k]["h0"] = H0[IDS == hidden_states[k]["id"]]
+            idx = hidden_states[k]["id"]
+            hidden_states[k]["h0"] = H0_map[idx]
         pickle.dump(hidden_states, f)

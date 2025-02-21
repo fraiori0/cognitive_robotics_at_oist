@@ -49,6 +49,15 @@ def identity_grad(x):
     return np.ones_like(x)
 
 
+# ReLU
+def relu(x):
+    return np.maximum(0, x)
+
+
+def relu_grad(x):
+    return np.where(x > 0, 1, 0)
+
+
 # loss function squared error
 def loss(y_true, y_pred):
     return ((y_true - y_pred) ** 2).sum(axis=-1)
@@ -307,8 +316,9 @@ class RNN:
         params = params.copy()
         for k in params.keys():
             for kk in params[k].keys():
-                params[k][kk] = params[k][kk] - learning_rate * (grads[k][kk]).mean(
-                    axis=0
+                params[k][kk] = (
+                    params[k][kk]
+                    - learning_rate * (grads[k][kk]).sum(axis=0) / self.train_seq_length
                 )
 
         return params
