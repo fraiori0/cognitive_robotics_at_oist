@@ -7,7 +7,7 @@ import numpy as np
 
 
 SAVE = True
-save_name = "eight"
+save_name = "one_circle"
 save_path = os.path.join(
     os.path.dirname(os.path.realpath(__file__)),
     os.pardir,
@@ -66,8 +66,6 @@ class MouseRecorder:
                 x0, y0, _ = self.recordings[-1][-1]
                 distance = np.sqrt((xm - x0) ** 2 + (ym - y0) ** 2)
 
-            print(self.distance_threshold)
-
             # if the distance is greater than the threshold, append the new point
             if distance > self.distance_threshold:
                 # get the current time
@@ -82,7 +80,8 @@ class MouseRecorder:
                 self.recordings[-1].append((xm, ym, timestamp))
                 # draw the new position
                 self.canvas.create_rectangle(
-                    xm - 2, ym - 2, xm + 2, ym + 2, fill="black")
+                    xm - 2, ym - 2, xm + 2, ym + 2, fill="black"
+                )
                 # if we are past half of the max length, turn window backgropund to yellow
                 l = len(self.recordings[-1])
                 if (l > self.max_length / 2) and (l < self.max_length):
@@ -122,16 +121,14 @@ class MouseRecorder:
                 p[:, 1] = self.canvas.winfo_height() - p[:, 1]
 
                 # normalize in the range [0, 1] but keeping the aspect ratio
-                p = p / max(self.canvas.winfo_width(),
-                            self.canvas.winfo_height())
+                p = p / max(self.canvas.winfo_width(), self.canvas.winfo_height())
 
                 seq_dict = {
                     "p": p.tolist(),
                     "t": sequence[:, 2].tolist(),
                 }
                 with open(
-                    os.path.join(self.save_path,
-                                 f"{self.save_name}_{i}.json"), "w"
+                    os.path.join(self.save_path, f"{self.save_name}_{i}.json"), "w"
                 ) as f:
                     json.dump(seq_dict, f)
         # close the window
@@ -143,8 +140,8 @@ app = MouseRecorder(
     root,
     save_path=save_path,
     save_name=save_name,
-    update_frequency=30,
-    distance_threshold=0.1,
+    update_frequency=50,
+    distance_threshold=0.05,
     max_length=500,
     save=SAVE,
 )

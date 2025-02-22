@@ -1,0 +1,1 @@
+{"input_size": 2, "hidden_size": 8, "output_size": 2, "train_seq_length": 80, "SEED_PARAMS": 1, "h0_min": 0.0, "h0_max": 1.0, "hidden_activation": "sigmoid", "output_activation": "leaky_relu", "p_input_ratio": 0.97, "separate_hidden_states": true}

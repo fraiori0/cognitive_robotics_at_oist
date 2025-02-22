@@ -15,18 +15,20 @@ os.environ["JAX_TRACEBACK_FILTERING"] = "off"
 
 SAVE = True
 
-data_name = "two_circles_opp"
+data_name = "one_circle"
 test_name = "h0"
-hidden_size = 16
+hidden_size = 2
 
 SEED = 3
 key = jax.random.key(SEED)
 n_steps_rollout = 50
 
-initial_seq_length = 5
+# random_hidden_states = True
+
+initial_seq_length = 10
 moving_window_step = 19
 n_gradient_updates_hidden = 1000
-learning_rate_hidden = 0.01
+learning_rate_hidden = 0.001
 
 """------------------"""
 """ Model """
@@ -63,22 +65,6 @@ if os.path.exists(os.path.join(model_path, f"{model_name}_params.pkl")):
 else:
     print("Could not load parameters")
     raise ValueError("Could not load parameters")
-
-
-activation_dict = {
-    "sigmoid": {
-        "fn": sigmoid,
-        "grad": sigmoid_grad,
-    },
-    "tanh": {
-        "fn": tanh,
-        "grad": tanh_grad,
-    },
-    "sin": {
-        "fn": sin,
-        "grad": sin_grad,
-    },
-}
 
 SEED_PARAMS = 0
 
@@ -289,7 +275,9 @@ for i in range(n_gradient_updates_hidden):
     # update the hidden states
     h0 = h0 - learning_rate_hidden * w_grad["hx"]["h0"]
     # clip in range
-    h0 = np.clip(h0, model_info_dict["h0_min"], model_info_dict["h0_max"])
+    h0 = np.clip(
+        h0, model_info_dict["h0_min_activation"], model_info_dict["h0_max_activation"]
+    )
 
 
 """------------------"""
@@ -425,8 +413,8 @@ fig.update_layout(
     # set square aspect ratio
     xaxis=dict(scaleanchor="y", scaleratio=1),
     # and axis ranges in 0-1
-    xaxis_range=[0, 1],
-    yaxis_range=[0, 1],
+    # xaxis_range=[0, 1],
+    # yaxis_range=[0, 1],
     # set white background and style
     # plot_bgcolor="white",
     template="plotly_white",
@@ -435,16 +423,49 @@ fig.update_layout(
 )
 
 
-# add ticks at 0.1 marks, both on x-y axis, and only in the range 0-1
-fig.update_xaxes(tick0=0, dtick=0.1, range=[0, 1])
-fig.update_yaxes(tick0=0, dtick=0.1, range=[0, 1])
+# add ticks at 0.1 marks, both on x-y axis
+fig.update_xaxes(tick0=0, dtick=0.1)
+fig.update_yaxes(tick0=0, dtick=0.1)
 # set tick color to black
 
 
 fig.show()
 
-exit()
+# exit()
 
+"""------------------"""
+""" Plot Loss History """
+"""------------------"""
+
+# plot the loss history
+fig = go.Figure()
+
+fig.add_trace(
+    go.Scatter(
+        x=history["loss"],
+        mode="lines",
+        name="MSE loss",
+        line=dict(
+            color="rgba(0, 157, 255, 1)",
+            width=6,
+        ),
+    )
+)
+
+fig.update_layout(
+    title="Loss history",
+    xaxis_title="Epoch",
+    yaxis_title="Loss",
+    # set white background and style
+    # plot_bgcolor="white",
+    template="plotly_white",
+    width=800,
+    height=800,
+)
+
+fig.show()
+
+exit()
 
 """------------------"""
 """ Plot PCA """

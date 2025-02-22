@@ -58,6 +58,39 @@ def relu_grad(x):
     return np.where(x > 0, 1, 0)
 
 
+# Leaky ReLU
+def leaky_relu(x):
+    return np.maximum(0.01 * x, x)
+
+
+def leaky_relu_grad(x):
+    return np.where(x > 0, 1, 0.01)
+
+
+activation_dict = {
+    "sigmoid": {
+        "fn": sigmoid,
+        "grad": sigmoid_grad,
+    },
+    "tanh": {
+        "fn": tanh,
+        "grad": tanh_grad,
+    },
+    "sin": {
+        "fn": sin,
+        "grad": sin_grad,
+    },
+    "relu": {
+        "fn": relu,
+        "grad": relu_grad,
+    },
+    "leaky_relu": {
+        "fn": leaky_relu,
+        "grad": leaky_relu_grad,
+    },
+}
+
+
 # loss function squared error
 def loss(y_true, y_pred):
     return ((y_true - y_pred) ** 2).sum(axis=-1)
