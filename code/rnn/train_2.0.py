@@ -451,7 +451,7 @@ try:
                         # print(f"\t\t  {h0_mask}")
                         # update the hidden state
                         H0_map = H0_map.at[idx_map].set(
-                            H0_map[idx_map] - learning_rate * h0_grad
+                            H0_map[idx_map] - learning_rate * h0_grad / train_seq_length
                         )
                 # or make the same update for all trajectories
                 # this will produce the same initial hidden state for all trajectories
@@ -459,7 +459,7 @@ try:
                     # take the mean of the gradients for the hidden states
                     h0_grad = w_grad["initial"]["h0"].mean(axis=0)
                     # update the hidden state
-                    H0_map = H0_map - learning_rate * h0_grad
+                    H0_map = H0_map - learning_rate * h0_grad / train_seq_length
 
                 # In any case, clip the hidden state in the limits,
                 # which should depend on the activation function
