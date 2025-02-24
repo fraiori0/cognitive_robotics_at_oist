@@ -306,7 +306,6 @@ class RNN:
         params,
         zs,
         y_true,
-        h1,
         delta_h1,
         grad_h1_h,
         grad_h1_y,
@@ -316,19 +315,89 @@ class RNN:
         zs = as returned from the full  when passing x of (batch_size, input_size)
         y_true.shape = (batch_size, output_size)
 
-        NOTE: zs["h"] is the hidden state at time t-1
-
         NOTE 2: we give as input also the 'carry' values for the error and gradients
             on the next (in time) and previous (in the the cycle) hidden state
         """
+
+        # update the gradients of the parameters using the above values
+        # gradient of loss at time t w.r.t. y(t), shape (batch_size, output_size)
+        grad_loss_t_y_t = loss_grad(y_true, zs["y"])
+        # gradient of y(t) with respect to h(t) shape (batch_size, output_size, hidden_size)
+        grad_y_h = params["output"]["Wy"] * self.output_activation_fn_grad(
+            zs["z_y"][..., :, None]
+        )
+
+        # hidden state error shape (batch_size, hidden_size)
+        delta_h_t = (grad_loss_t_y_t[..., None] * grad_y_h).sum(axis=-2) + (
+            delta_h_t[..., None] * grad_h1_h
+        ).sum(axis=-2)
+        # output error shape (batch_size, output_size)
+        delta_y_t = grad_loss_t_y_t + (delta_h_t[..., None] * grad_h1_y).sum(axis=-2)
+
+        # gradient of y(t) w.r.t. Wy shape (batch_size, output_size, hidden_size)
+        # TODO: check if this is correct
+        grad_y_Wy = zs["h"][..., None, :] * self.output_activation_fn_grad(
+            zs["z_y"][..., :, None]
+        )
+        # gradient of y(t) w.r.t. by shape (batch_size, output_size)
+        grad_y_by = self.output_activation_fn_grad(zs["z_y"][..., :])
+        # gradient of h(t) w.r.t. Wh shape (batch_size, hidden_size, hidden_size)
+        grad_h_Wh = zs["h_prev"][..., None, :] * self.hidden_activation_fn_grad(
+            zs["z_h"][..., :, None]
+        )
+        # gradient of h(t) w.r.t. Wx shape (batch_size, hidden_size, input_size)
+        grad_h_Wx = zs["x"][..., None, :] * self.hidden_activation_fn_grad(
+            zs["z_h"][..., :, None]
+        )
+        # gradient of h(t) w.r.t. bh shape (batch_size, hidden_size)
+        grad_h_bh = self.hidden_activation_fn_grad(zs["z_h"][..., :])
+
+        # update the gradients of the parameters using the above values
+        grads = {
+            "hidden": {},
+            "output": {},
+        }
+        grads["output"]["Wy"] = delta_y_t[..., None] * grad_y_Wy
+        grads["output"]["by"] = delta_y_t * grad_y_by
+        grads["hidden"]["Wh"] = delta_h_t[..., None] * grad_h_Wh
+        grads["hidden"]["Wx"] = delta_h_t[..., None] * grad_h_Wx
+        grads["hidden"]["bh"] = delta_h_t * grad_h_bh
+
+        # # # Update gradients of h(t+1), here we use the mask
+
+        # gradient of h(t+1) w.r.t. h(t) shape (batch_size, hidden_size, hidden_size)
+        grad_h1_h = self.hidden_activation_fn_grad(zs["z_h"][..., None, :]) * (
+            # (hidden, hidden)
+            params["hidden"]["Wh"]
+            # (batch, None, None)
+            + zs["irc_mask"][:, None, None]
+            # (batch, hidden, hidden)
+            # NOTE, here is important that input_size = output_size
+            * (
+                # (hidden, input, None)
+                params["hidden"]["Wx"][..., None]
+                # (batch, None, output, None)
+                * self.output_activation_fn_grad(zs["z_y"][..., None, :, None])
+                # (None, output, hidden)
+                * params["output"]["Wy"][None]
+            ).sum(axis=-2)
+        )
+
+        # gradient of h(t+1) w.r.t. y(t) shape (batch_size, hidden_size, output_size)
+        grad_h1_y = (
+            # (batch, None, None)
+            zs["irc_mask"][:, None, None]
+            # (batch, hidden, None)
+            * self.hidden_activation_fn(zs["z_h"][..., :, None])
+            # (hidden, input)
+            * params["hidden"]["Wx"]
+        )
 
     def backprop(self, params, zs, y_true):
         """Backward pass, compute the gradients of the loss with respect to the parameters.
 
         zs = as returned from self.forward_train when passing x of (batch_size, self.train_seq_length, output_size)
         y_true.shape = (batch_size, self.train_seq_length, output_size)
-
-        NOTE: zs["h"][..., t, :] is the hidden state at time t-1
         """
 
         batch_dims = y_true.shape[:-2]
@@ -376,13 +445,13 @@ class RNN:
 
             # gradient of y(t) w.r.t. Wy shape (batch_size, output_size, hidden_size)
             # TODO: check if this is correct
-            grad_y_Wy = zs["h"][..., t + 1, None, :] * self.output_activation_fn_grad(
+            grad_y_Wy = zs["h"][..., t, None, :] * self.output_activation_fn_grad(
                 zs["z_y"][..., t, :, None]
             )
             # gradient of y(t) w.r.t. by shape (batch_size, output_size)
             grad_y_by = self.output_activation_fn_grad(zs["z_y"][..., t, :])
             # gradient of h(t) w.r.t. Wh shape (batch_size, hidden_size, hidden_size)
-            grad_h_Wh = zs["h"][..., t, None, :] * self.hidden_activation_fn_grad(
+            grad_h_Wh = zs["h_prev"][..., t, None, :] * self.hidden_activation_fn_grad(
                 zs["z_h"][..., t, :, None]
             )
             # gradient of h(t) w.r.t. Wx shape (batch_size, hidden_size, input_size)
@@ -396,7 +465,7 @@ class RNN:
             grads["output"]["Wy"] = grads["output"]["Wy"] + (
                 delta_y_t[..., None] * grad_y_Wy
             )
-            grads["output"]["by"] = grads["output"]["by"] + delta_y_t
+            grads["output"]["by"] = grads["output"]["by"] + delta_y_t * grad_y_by
             grads["hidden"]["Wh"] = grads["hidden"]["Wh"] + (
                 delta_h_t[..., None] * grad_h_Wh
             )
