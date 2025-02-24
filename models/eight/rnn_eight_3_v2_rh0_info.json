@@ -1,1 +1,0 @@
-{"input_size": 2, "hidden_size": 3, "output_size": 2, "train_seq_length": 10, "SEED_PARAMS": 1, "h0_min_activation": 0.0, "h0_max_activation": 1.0, "h0_min_random": 0.4, "h0_max_random": 0.6, "hidden_activation": "sigmoid", "output_activation": "sigmoid", "p_input_ratio": 0.8, "separate_hidden_states": false}

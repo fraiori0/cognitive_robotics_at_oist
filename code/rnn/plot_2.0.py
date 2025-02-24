@@ -15,9 +15,9 @@ os.environ["JAX_TRACEBACK_FILTERING"] = "off"
 
 SAVE = True
 
-data_name = "one_circle"
+data_name = "eight"
 test_name = "v2_rh0"
-hidden_size = 2
+hidden_size = 8
 
 SEED = 3
 key = jax.random.key(SEED)
@@ -338,17 +338,27 @@ for k in h_traj_dict.keys():
     pca_components_dict[k] = pca_components
 
 
-# project the (original) hidden states onto the PCA components
+# project the hidden states onto the PCA components
 # so we keep the dimensions as (n_traj, n_steps, features)
-
 h_traj_pca = {}
 for k in h_traj_dict.keys():
     h_traj_pca[k] = (h_traj_dict[k][..., None, :] * pca_components_dict[k]).sum(axis=-1)
+
+
+# project also the initial hidden states
+h0_pca = {}
+for k in h_traj_dict.keys():
+    idx = np.where(IDS == ps_dict[k]["id"])[0]
+    h0_proj = (H0_map[idx][..., None, :] * pca_components_dict[k]).sum(axis=-1)
+    h0_pca[k] = h0_proj
+
 
 # print shape
 for k in h_traj_pca.keys():
     print(f"\t{k}")
     print(f"\t  h_traj_pca[{k}]: {h_traj_pca[k].shape}")
+    print(f"\t  h0_pca[{k}]: {h0_pca[k].shape}")
+
 
 # exit()
 
@@ -437,7 +447,7 @@ fig = go.Figure()
 
 fig.add_trace(
     go.Scatter(
-        x=history["loss"],
+        y=history["loss"],
         mode="lines",
         name="MSE loss",
         line=dict(
@@ -492,6 +502,20 @@ for k in h_traj_pca.keys():
                 # legendgroup=k,
             )
         )
+        # add red markers for the pca of the initial hidden states
+        fig.add_trace(
+            go.Scatter(
+                x=h0_pca[k][:, 0],
+                y=h0_pca[k][:, 1],
+                mode="markers",
+                marker=dict(
+                    color="red",
+                    size=8,
+                ),
+                name="Initial hidden state",
+            )
+        )
+
 
 fig.update_layout(
     title="PCA of hidden states",
@@ -580,6 +604,21 @@ for k in h_traj_pca.keys():
                     width=2,
                 ),
                 # legendgroup=k,
+            )
+        )
+
+        # add red markers for the pcs of the initial hidden states
+        fig.add_trace(
+            go.Scatter3d(
+                x=h0_pca[k][:, 0],
+                y=h0_pca[k][:, 1],
+                z=h0_pca[k][:, 2],
+                mode="markers",
+                marker=dict(
+                    color="red",
+                    size=8,
+                ),
+                name="Initial hidden state",
             )
         )
 

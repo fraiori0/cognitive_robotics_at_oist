@@ -16,16 +16,15 @@ np.set_printoptions(precision=5, suppress=True)
 SAVE = True
 
 n_epochs = 10000
-n_batch_samples = 32
-learning_rate = 1.0e-2
+n_batch_samples = 16
+learning_rate = 1.0e-3
 
 n_epochs_checkpoint = 1000
 
-p_input_ratio = 0.8
-moving_window_step = 1
+p_input_ratio = 0.75
+moving_window_step = 30
 
-separate_hidden_states = False
-random_hidden_states = True
+random_hidden_states = False
 
 data_name = "eight"
 test_name = "v2_rh0"
@@ -37,20 +36,20 @@ n_print_epochs = 25
 """------------------"""
 
 input_size = 2
-hidden_size = 8
+hidden_size = 4
 output_size = 2
 
-train_seq_length = 30
+train_seq_length = 60
 
 # note, these bounds should depend on the activation function
 # of the hidden layer, to make sense
-h0_min_random = 0.3  # -0.8  #
-h0_max_random = 0.7
+h0_min_random = -0.1  # -0.8  #
+h0_max_random = 0.1
 
-h0_min_activation = 0.0  # -0.8  #
+h0_min_activation = -1.0  # -0.8  #
 h0_max_activation = 1.0
 
-hidden_activation = "sigmoid"
+hidden_activation = "tanh"
 output_activation = "sigmoid"
 
 SEED_PARAMS = 1
@@ -180,7 +179,6 @@ model_info_dict = {
     "hidden_activation": hidden_activation,
     "output_activation": output_activation,
     "p_input_ratio": p_input_ratio,
-    "separate_hidden_states": separate_hidden_states,
 }
 
 # dictionary containing the training history
@@ -188,16 +186,17 @@ history = {
     "loss": [],
 }
 
-# generate a single hidden state for each sequence
+# generate a single hidden state for each sequence in the training set
 # we will back-propagate gradients to optimize also these initial hidden states
 key = jax.random.key(0)
 hidden_states = {}
 for k in ps_dict.keys():
     # use the same key for all hidden states if they are shared
     # so they will be initialized with the same random values
-    if separate_hidden_states:
-        key, _ = jax.random.split(key)
-    h0 = rnn.gen_hidden_state_uniform(key, 1, h0_min_random, h0_max_random)
+    key, _ = jax.random.split(key)
+    h0 = rnn.gen_hidden_state_uniform(
+        key, ps_dict[k]["x"].shape[0], h0_min_random, h0_max_random
+    )
     hidden_states[k] = {
         "id": ps_dict[k]["id"],
         "h0": h0,
@@ -255,27 +254,25 @@ for k in hidden_states.keys():
 X = []
 Y = []
 IDS = []
-# this array will not be shuffled, it's indexes correspond to the hidden_states for
-# trajectories of such ID
-H0_map = []
+H0 = []
 for k in ps_dict.keys():
     X.append(ps_dict[k]["x"])
     Y.append(ps_dict[k]["y"])
     IDS.append(np.ones(ps_dict[k]["x"].shape[0], dtype=int) * ps_dict[k]["id"])
-    H0_map.append(hidden_states[k]["h0"])
+    H0.append(hidden_states[k]["h0"])
 
 
 X = np.concatenate(X, axis=0)
 Y = np.concatenate(Y, axis=0)
 IDS = np.concatenate(IDS, axis=0)
-H0_map = np.concatenate(H0_map, axis=0)
+H0 = np.concatenate(H0, axis=0)
 
 
 print(f"\nData concatenated, shape of whole dataset:")
 print(f"\tX: {X.shape}")
 print(f"\tY: {Y.shape}")
 print(f"\tIDS: {IDS.shape}")
-print(f"\tH0_map: {H0_map.shape}")
+print(f"\tH0: {H0.shape}")
 
 # exit()
 
@@ -289,7 +286,7 @@ print("\nTesting forward_training pass")
 xs = X[:n_batch_samples]
 ys_target = Y[:n_batch_samples]
 ids = IDS[:n_batch_samples]
-h0 = H0_map[ids]
+h0 = H0[:n_batch_samples]
 
 # with JIT is much much faster, but intense to compile depending on how many time-step we have
 # in the forward pass
@@ -377,8 +374,7 @@ try:
         X = X[idx]
         Y = Y[idx]
         IDS = IDS[idx]
-        # note, we don't shuffle the H0_map, it's indexes correspond to the hidden_states for
-        # trajectories of such ID
+        H0 = H0[idx]
 
         # iterate over the training sequences in mini-batches
         for nb, i_start in enumerate(range(0, X.shape[0], n_batch_samples)):
@@ -399,7 +395,7 @@ try:
                     key, xs.shape[0], h0_min_random, h0_max_random
                 )
             else:
-                h0 = H0_map[ids]
+                h0 = H0[i_start:i_stop]
 
             # forward pass
             key, _ = jax.random.split(key)

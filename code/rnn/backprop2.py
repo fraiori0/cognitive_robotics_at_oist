@@ -1,6 +1,7 @@
 import jax
 import jax.numpy as np
 from jax import grad, jit, vmap
+from functools import partial
 
 
 # sigmoid function
@@ -101,6 +102,14 @@ def loss_grad(y_true, y_pred):
     return y_pred - y_true
 
 
+def apply_grads(params, grads, learning_rate, train_seq_length):
+    return params - learning_rate * grads.sum(axis=0) / train_seq_length
+
+
+def add_values(dict1, dict2):
+    return dict1 + dict2
+
+
 class RNN:
     """Vanilla Recurrent Network with Sigmoid activation function."""
 
@@ -156,6 +165,7 @@ class RNN:
         }
 
         self.forward_train_single_jit = jit(self.forward_train_single)
+        self.backprop_single_jit = jit(self.backprop_single)
 
     def forward_train_single(self, params, x, h0):
         """Forward pass for a single time step
@@ -241,9 +251,15 @@ class RNN:
         # perform a first forward pass, after that we may apply input ratio control
         # (i.e., the first input x cannot be self-generated)
         zs_step = self.forward_train_single_jit(params, x[:, 0, :], h0)
-        for k, v in zs_step.items():
-            zs[k].append(v)
-        zs["irc_mask"].append(np.zeros((x.shape[0],)))
+        zs_step["irc_mask"] = np.zeros((x.shape[0],))
+        # append value maunually, no 'for' cycle to improve jitting
+        zs["h_prev"].append(zs_step["h_prev"])
+        zs["x"].append(zs_step["x"])
+        zs["irc_mask"].append(zs_step["irc_mask"])
+        zs["z_h"].append(zs_step["z_h"])
+        zs["h"].append(zs_step["h"])
+        zs["z_y"].append(zs_step["z_y"])
+        zs["y"].append(zs_step["y"])
 
         # loop forward in time
         # NOTE! STARTING FROM 1, the first input was already processed
@@ -264,18 +280,27 @@ class RNN:
 
             # forward pass
             zs_step = self.forward_train_single_jit(params, x_input, zs_step["h"])
+            zs_step["irc_mask"] = mask
 
-            for k, v in zs_step.items():
-                zs[k].append(v)
-            zs["irc_mask"].append(mask)
+            # append value maunually, no 'for' cycle to improve jitting
+            zs["h_prev"].append(zs_step["h_prev"])
+            zs["x"].append(zs_step["x"])
+            zs["irc_mask"].append(zs_step["irc_mask"])
+            zs["z_h"].append(zs_step["z_h"])
+            zs["h"].append(zs_step["h"])
+            zs["z_y"].append(zs_step["z_y"])
+            zs["y"].append(zs_step["y"])
 
-        # convert the lists to arrays
-        for k, v in zs.items():
-            # stack along the time axis, shape will be (batch_size, train_seq_length, hidden_size)
-            zs[k] = np.stack(v, axis=1)
+            # zs["irc_mask"].append(mask)
 
-        # # add to zs the initial hidden state, that does not have a time axis
-        # zs["h0"] = h0
+        # stack values manually, no 'for' cycle to improve jitting
+        zs["h_prev"] = np.stack(zs["h_prev"], axis=1)
+        zs["x"] = np.stack(zs["x"], axis=1)
+        zs["irc_mask"] = np.stack(zs["irc_mask"], axis=1)
+        zs["z_h"] = np.stack(zs["z_h"], axis=1)
+        zs["h"] = np.stack(zs["h"], axis=1)
+        zs["z_y"] = np.stack(zs["z_y"], axis=1)
+        zs["y"] = np.stack(zs["y"], axis=1)
 
         return zs
 
@@ -328,11 +353,11 @@ class RNN:
         )
 
         # hidden state error shape (batch_size, hidden_size)
-        delta_h_t = (grad_loss_t_y_t[..., None] * grad_y_h).sum(axis=-2) + (
-            delta_h_t[..., None] * grad_h1_h
+        delta_h1 = (grad_loss_t_y_t[..., None] * grad_y_h).sum(axis=-2) + (
+            delta_h1[..., None] * grad_h1_h
         ).sum(axis=-2)
         # output error shape (batch_size, output_size)
-        delta_y_t = grad_loss_t_y_t + (delta_h_t[..., None] * grad_h1_y).sum(axis=-2)
+        delta_y_t = grad_loss_t_y_t + (delta_h1[..., None] * grad_h1_y).sum(axis=-2)
 
         # gradient of y(t) w.r.t. Wy shape (batch_size, output_size, hidden_size)
         # TODO: check if this is correct
@@ -353,18 +378,17 @@ class RNN:
         grad_h_bh = self.hidden_activation_fn_grad(zs["z_h"][..., :])
 
         # update the gradients of the parameters using the above values
-        grads = {
+        grads_t = {
             "hidden": {},
             "output": {},
         }
-        grads["output"]["Wy"] = delta_y_t[..., None] * grad_y_Wy
-        grads["output"]["by"] = delta_y_t * grad_y_by
-        grads["hidden"]["Wh"] = delta_h_t[..., None] * grad_h_Wh
-        grads["hidden"]["Wx"] = delta_h_t[..., None] * grad_h_Wx
-        grads["hidden"]["bh"] = delta_h_t * grad_h_bh
+        grads_t["output"]["Wy"] = delta_y_t[..., None] * grad_y_Wy
+        grads_t["output"]["by"] = delta_y_t * grad_y_by
+        grads_t["hidden"]["Wh"] = delta_h1[..., None] * grad_h_Wh
+        grads_t["hidden"]["Wx"] = delta_h1[..., None] * grad_h_Wx
+        grads_t["hidden"]["bh"] = delta_h1 * grad_h_bh
 
         # # # Update gradients of h(t+1), here we use the mask
-
         # gradient of h(t+1) w.r.t. h(t) shape (batch_size, hidden_size, hidden_size)
         grad_h1_h = self.hidden_activation_fn_grad(zs["z_h"][..., None, :]) * (
             # (hidden, hidden)
@@ -393,6 +417,8 @@ class RNN:
             * params["hidden"]["Wx"]
         )
 
+        return grads_t, delta_h1, grad_h1_h, grad_h1_y
+
     def backprop(self, params, zs, y_true):
         """Backward pass, compute the gradients of the loss with respect to the parameters.
 
@@ -417,7 +443,7 @@ class RNN:
         }
 
         # # Initialize the hidden state error
-        delta_h_t = np.zeros((*batch_dims, self.hidden_size))
+        delta_h1 = np.zeros((*batch_dims, self.hidden_size))
         # # And gradients of next hidden state
         # gradient of h(t+1) w.r.t. h(t)
         grad_h1_h = np.zeros((*batch_dims, self.hidden_size, self.hidden_size))
@@ -427,88 +453,39 @@ class RNN:
         # iterate from the last time step to the first
         for t in reversed(range(self.train_seq_length)):
 
-            # gradient of loss at time t w.r.t. y(t), shape (batch_size, output_size)
-            grad_loss_t_y_t = loss_grad(y_true[:, t, :], zs["y"][:, t, :])
-            # gradient of y(t) with respect to h(t) shape (batch_size, output_size, hidden_size)
-            grad_y_h = params["output"]["Wy"] * self.output_activation_fn_grad(
-                zs["z_y"][..., t, :, None]
+            zs_step = jax.tree_util.tree_map(
+                partial(
+                    np.take,
+                    indices=t,
+                    axis=1,
+                ),
+                zs,
             )
 
-            # hidden state error shape (batch_size, hidden_size)
-            delta_h_t = (grad_loss_t_y_t[..., None] * grad_y_h).sum(axis=-2) + (
-                delta_h_t[..., None] * grad_h1_h
-            ).sum(axis=-2)
-            # output error shape (batch_size, output_size)
-            delta_y_t = grad_loss_t_y_t + (delta_h_t[..., None] * grad_h1_y).sum(
-                axis=-2
+            # compute the gradients for the time step t
+            grads_t, delta_h1, grad_h1_h, grad_h1_y = self.backprop_single_jit(
+                params,
+                zs_step,
+                y_true[:, t, :],
+                delta_h1,
+                grad_h1_h,
+                grad_h1_y,
             )
 
-            # gradient of y(t) w.r.t. Wy shape (batch_size, output_size, hidden_size)
-            # TODO: check if this is correct
-            grad_y_Wy = zs["h"][..., t, None, :] * self.output_activation_fn_grad(
-                zs["z_y"][..., t, :, None]
-            )
-            # gradient of y(t) w.r.t. by shape (batch_size, output_size)
-            grad_y_by = self.output_activation_fn_grad(zs["z_y"][..., t, :])
-            # gradient of h(t) w.r.t. Wh shape (batch_size, hidden_size, hidden_size)
-            grad_h_Wh = zs["h_prev"][..., t, None, :] * self.hidden_activation_fn_grad(
-                zs["z_h"][..., t, :, None]
-            )
-            # gradient of h(t) w.r.t. Wx shape (batch_size, hidden_size, input_size)
-            grad_h_Wx = zs["x"][..., t, None, :] * self.hidden_activation_fn_grad(
-                zs["z_h"][..., t, :, None]
-            )
-            # gradient of h(t) w.r.t. bh shape (batch_size, hidden_size)
-            grad_h_bh = self.hidden_activation_fn_grad(zs["z_h"][..., t, :])
-
-            # update the gradients of the parameters using the above values
-            grads["output"]["Wy"] = grads["output"]["Wy"] + (
-                delta_y_t[..., None] * grad_y_Wy
-            )
-            grads["output"]["by"] = grads["output"]["by"] + delta_y_t * grad_y_by
-            grads["hidden"]["Wh"] = grads["hidden"]["Wh"] + (
-                delta_h_t[..., None] * grad_h_Wh
-            )
-            grads["hidden"]["Wx"] = grads["hidden"]["Wx"] + (
-                delta_h_t[..., None] * grad_h_Wx
-            )
-            grads["hidden"]["bh"] = grads["hidden"]["bh"] + delta_h_t * grad_h_bh
-
-            # # # Update gradients of h(t+1), here we use the mask
-
-            # gradient of h(t+1) w.r.t. h(t) shape (batch_size, hidden_size, hidden_size)
-            grad_h1_h = self.hidden_activation_fn_grad(zs["z_h"][..., t, None, :]) * (
-                # (hidden, hidden)
-                params["hidden"]["Wh"]
-                # (batch, None, None)
-                + zs["irc_mask"][:, t, None, None]
-                # (batch, hidden, hidden)
-                # NOTE, here is important that input_size = output_size
-                * (
-                    # (hidden, input, None)
-                    params["hidden"]["Wx"][..., None]
-                    # (batch, None, output, None)
-                    * self.output_activation_fn_grad(zs["z_y"][..., t, None, :, None])
-                    # (None, output, hidden)
-                    * params["output"]["Wy"][None]
-                ).sum(axis=-2)
-            )
-
-            # gradient of h(t+1) w.r.t. y(t) shape (batch_size, hidden_size, output_size)
-            grad_h1_y = (
-                # (batch, None, None)
-                zs["irc_mask"][:, t, None, None]
-                # (batch, hidden, None)
-                * self.hidden_activation_fn(zs["z_h"][..., t, :, None])
-                # (hidden, input)
-                * params["hidden"]["Wx"]
-            )
+            # update the gradients
+            grads = jax.tree_util.tree_map(add_values, grads, grads_t)
 
         # compute the gradient for the initial hidden state
         # which is the hidden state error for the first state
+        grad_loss_t_y_t = loss_grad(y_true[:, 0], zs["y"][:, 0])
+        # gradient of y(t) with respect to h(t) shape (batch_size, output_size, hidden_size)
+        grad_y_h = params["output"]["Wy"] * self.output_activation_fn_grad(
+            zs["z_y"][..., 0, :, None]
+        )
+
         grads["initial"] = {
             "h0": (grad_loss_t_y_t[..., None] * grad_y_h).sum(axis=-2)
-            + (delta_h_t[..., None] * grad_h1_h).sum(axis=-2)
+            + (delta_h1[..., None] * grad_h1_h).sum(axis=-2)
         }
 
         return grads
@@ -526,16 +503,28 @@ class RNN:
         NOTE: this will not update the initial hidden state, as it's not a key of params
         """
         params = params.copy()
-        for k in params.keys():
-            for kk in params[k].keys():
-                params[k][kk] = (
-                    params[k][kk]
-                    - learning_rate
-                    # NOTE: we divide by the train_seq_length
-                    # because in backprop we sum, in this way it become like a mean
-                    # of the gradients for the loss at each time step
-                    # and we have similar update magnitude for different train_seq_length
-                    * (grads[k][kk]).sum(axis=0) / self.train_seq_length
-                )
+        grads = grads.copy()
+        grads.pop("initial")
+        params = jax.tree_util.tree_map(
+            partial(
+                apply_grads,
+                learning_rate=learning_rate,
+                train_seq_length=self.train_seq_length,
+            ),
+            params,
+            grads,
+        )
+
+        # for k in params.keys():
+        #     for kk in params[k].keys():
+        #         params[k][kk] = (
+        #             params[k][kk]
+        #             - learning_rate
+        #             # NOTE: we divide by the train_seq_length
+        #             # because in backprop we sum, in this way it become like a mean
+        #             # of the gradients for the loss at each time step
+        #             # and we have similar update magnitude for different train_seq_length
+        #             * (grads[k][kk]).sum(axis=0) / self.train_seq_length
+        #         )
 
         return params
