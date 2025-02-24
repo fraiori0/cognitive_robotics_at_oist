@@ -91,14 +91,14 @@ activation_dict = {
 }
 
 
-# loss function squared error
+# loss function 1/2 squared error
 def loss(y_true, y_pred):
-    return ((y_true - y_pred) ** 2).sum(axis=-1)
+    return (0.5 * (y_true - y_pred) ** 2).sum(axis=-1)
 
 
 # derivative of the squared error loss function
 def loss_grad(y_true, y_pred):
-    return -2.0 * (y_true - y_pred)
+    return y_pred - y_true
 
 
 class RNN:
