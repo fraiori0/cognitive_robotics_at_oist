@@ -17,17 +17,18 @@ SAVE = True
 
 n_epochs = 10000
 n_batch_samples = 32
-learning_rate = 1.0e-2
+learning_rate = 1.0e-3
 
 n_epochs_checkpoint = 1000
 
-p_input_ratio = 0.8
+p_input_ratio = 0.75
 moving_window_step = 1
 
 random_hidden_states = False
 
-data_name = "eight"
-test_name = "v2_allh0_bis"
+data_name = "two_circles"
+test_name = "seph0"
+# seph0_leakyrelu
 
 n_print_epochs = 25
 
@@ -39,7 +40,7 @@ input_size = 2
 hidden_size = 4
 output_size = 2
 
-train_seq_length = 30
+train_seq_length = 15
 
 # note, these bounds should depend on the activation function
 # of the hidden layer, to make sense

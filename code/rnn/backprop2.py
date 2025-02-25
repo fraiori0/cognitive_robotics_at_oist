@@ -111,7 +111,7 @@ def add_values(dict1, dict2):
 
 
 class RNN:
-    """Vanilla Recurrent Network with Sigmoid activation function."""
+    """Elman Recurrent Network."""
 
     def __init__(
         self,
@@ -172,7 +172,8 @@ class RNN:
         Returns also intermdiate values needed for backpropagation.
         Function useful for JIT compilation.
 
-        NOTE: here we assume a single time-step, and we are missing the time dimension in the input x
+        NOTE: here we assume a single time-step,
+        and we are missing the time dimension in the input x
         x.shape = (batch_size, input_size)
         h0.shape = (batch_size, hidden_size)
         """
@@ -337,7 +338,7 @@ class RNN:
     ):
         """Backward pass for a single time step, to be JIT-compiled.
 
-        zs = as returned from the full  when passing x of (batch_size, input_size)
+        zs = as returned from the forward_train when passing x of (batch_size, input_size)
         y_true.shape = (batch_size, output_size)
 
         NOTE 2: we give as input also the 'carry' values for the error and gradients

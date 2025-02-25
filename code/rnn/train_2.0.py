@@ -17,18 +17,18 @@ SAVE = True
 
 n_epochs = 10000
 n_batch_samples = 32
-learning_rate = 1.0e-2
+learning_rate = 5 * 1.0e-3
 
 n_epochs_checkpoint = 1000
 
-p_input_ratio = 0.8
+p_input_ratio = 0.85
 moving_window_step = 1
 
-separate_hidden_states = False
-random_hidden_states = True
+separate_hidden_states = True
+random_hidden_states = False
 
-data_name = "eight"
-test_name = "v2_rh0"
+data_name = "two_circles"
+test_name = "singleh0_lkrelu"
 
 n_print_epochs = 25
 
@@ -37,21 +37,21 @@ n_print_epochs = 25
 """------------------"""
 
 input_size = 2
-hidden_size = 8
+hidden_size = 4
 output_size = 2
 
-train_seq_length = 30
+train_seq_length = 50
 
 # note, these bounds should depend on the activation function
 # of the hidden layer, to make sense
-h0_min_random = 0.3  # -0.8  #
+h0_min_random = -0.7
 h0_max_random = 0.7
 
-h0_min_activation = 0.0  # -0.8  #
+h0_min_activation = -1.0  # -0.8  #
 h0_max_activation = 1.0
 
-hidden_activation = "sigmoid"
-output_activation = "sigmoid"
+hidden_activation = "tanh"
+output_activation = "leaky_relu"
 
 SEED_PARAMS = 1
 
@@ -160,6 +160,7 @@ model_path = os.path.join(
     os.pardir,
     "models",
     data_name,
+    test_name,
 )
 
 # create the folder if it does not exist

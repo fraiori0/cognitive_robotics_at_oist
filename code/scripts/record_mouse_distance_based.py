@@ -6,7 +6,7 @@ import json
 import numpy as np
 
 
-SAVE = True
+SAVE = False
 save_name = "one_circle"
 save_path = os.path.join(
     os.path.dirname(os.path.realpath(__file__)),
