@@ -2,7 +2,7 @@ import os
 import jax
 import jax.numpy as np
 from jax import grad, jit, vmap
-from backprop import *
+from backprop2 import *
 from time import time
 from functools import partial
 import plotly.graph_objects as go
@@ -13,7 +13,7 @@ os.environ["JAX_TRACEBACK_FILTERING"] = "off"
 
 SAVE = False
 
-data_name = "two_circles_opp"
+data_name = "one_circle"
 
 """------------------"""
 """ Import and Process Data """
