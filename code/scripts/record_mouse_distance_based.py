@@ -6,8 +6,8 @@ import json
 import numpy as np
 
 
-SAVE = False
-save_name = "one_circle"
+SAVE = True
+save_name = "opposing_circles"
 save_path = os.path.join(
     os.path.dirname(os.path.realpath(__file__)),
     os.pardir,

@@ -21,14 +21,14 @@ learning_rate = 5 * 1.0e-3
 
 n_epochs_checkpoint = 1000
 
-p_input_ratio = 0.85
+p_input_ratio = 0.88
 moving_window_step = 1
 
 separate_hidden_states = True
 random_hidden_states = False
 
-data_name = "two_circles"
-test_name = "singleh0_lkrelu"
+data_name = "opposing_circles"
+test_name = "singleh0"
 
 n_print_epochs = 25
 
@@ -37,10 +37,10 @@ n_print_epochs = 25
 """------------------"""
 
 input_size = 2
-hidden_size = 4
+hidden_size = 6
 output_size = 2
 
-train_seq_length = 50
+train_seq_length = 30
 
 # note, these bounds should depend on the activation function
 # of the hidden layer, to make sense

@@ -15,9 +15,9 @@ os.environ["JAX_TRACEBACK_FILTERING"] = "off"
 
 SAVE = True
 
-data_name = "two_circles"
-test_name = "singleh0_lkrelu"
-hidden_size = 4
+data_name = "opposing_circles"
+test_name = "singleh0"
+hidden_size = 6
 
 SEED = 3
 key = jax.random.key(SEED)
@@ -32,7 +32,7 @@ learning_rate_hidden = 0.01
 
 checkpoint = None
 
-backprop_initial_states = False
+backprop_initial_states = True
 random_hidden_states = False
 
 image_folder = os.path.join(

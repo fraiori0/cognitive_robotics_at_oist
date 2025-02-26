@@ -15,9 +15,9 @@ os.environ["JAX_TRACEBACK_FILTERING"] = "off"
 
 SAVE = False
 
-data_name = "two_circles"
-test_name = "singleh0_lkrelu"
-hidden_size = 4
+data_name = "opposing_circles"
+test_name = "singleh0"
+hidden_size = 6
 
 SEED = 3
 key = jax.random.key(SEED)
