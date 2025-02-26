@@ -13,10 +13,10 @@ from sklearn.decomposition import PCA
 
 os.environ["JAX_TRACEBACK_FILTERING"] = "off"
 
-SAVE = True
+SAVE = False
 
-data_name = "eight"
-test_name = "singleh0"
+data_name = "two_circles"
+test_name = "singleh0_lkrelu"
 hidden_size = 4
 
 SEED = 3
@@ -62,6 +62,7 @@ model_path = os.path.join(
     data_name,
     test_name,
 )
+
 
 name_suffix = f"_{data_name}_{hidden_size}_{test_name}"
 
